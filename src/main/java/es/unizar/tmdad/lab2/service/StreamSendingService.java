@@ -45,9 +45,11 @@ public class StreamSendingService {
 		fsp.addLocation(-180, -90, 180, 90);
 
 		// Primer paso
-		// Registro un gateway para recibir los mensajes
+		// Registro un gateway para recibir los mensajes (clase que va a actuar como receptora de mensajes para pasarlos a Spring integration)
 		// Ver @MessagingGateway en MyStreamListener en TwitterFlow.java
-		stream = twitterTemplate.streamingOperations().filter(fsp, Collections.singletonList(integrationStreamListener));
+		stream = twitterTemplate.streamingOperations().filter(fsp, Collections.singletonList(integrationStreamListener)); 
+		//IntegrationStreamListener es un bean. Spring Integration exige que sea una interfaz (cogemos el Stream de Twitter)
+		//... cualquier invocación a cualquier método lo convierto en un mensaje de entrada en el canal...
 	}
 
 	// Cuarto paso
@@ -57,20 +59,29 @@ public class StreamSendingService {
 		Map<String, Object> map = new HashMap<>();
 		map.put(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.APPLICATION_JSON);
 
-		// Expresión lambda: si el tweet contiene s, devuelve true
-		Predicate<String> notContainsTopic = s -> tweet.getText().contains(s);
-		// Expresión lambda: envia un tweet al canal asociado al tópico s
+		//NOTA>> Ver código original sin lambdas (transparencias)
+			//Código imperativo: dice lo que hay que hacer
+			//Código funcional: Uso de streams (cualquier lista se pasa "automáticamente" a stream.
+				//A estos streams se les puede aplicar filtros y producción(foreach)
+				//
+		// Expresión lambda: si el tweet contiene s, devuelve true //Predicate espera que se devuelva Boolean
+		Predicate<String> notContainsTopic = s -> tweet.getText().contains(s); //Why "notContainsTopic"??? -> "containsTopic"
+		// Expresión lambda: envia un tweet al canal asociado al tópico s // Consumer espera Void
 		Consumer<String> convertAndSend = s -> ops.convertAndSend("/queue/search/" + s, tweet, map);
 
+		// notContainsTopic & convertAndSend -> funciones/expresiones lambda (sería como una versión mejorada de clases anónimas)
 		lookupService.getQueries().stream().filter(notContainsTopic).forEach(convertAndSend);
 	}
 
-	public void sendTweet(TargetedTweet tweet) {
-		//
+	public void sendTweet(TargetedTweet targetedTweet) {
 		// CAMBIOS A REALIZAR:
 		//
 		// Crea un mensaje que envie un tweet a un único tópico destinatario
 		//
+		Map<String, Object> map = new HashMap<>();
+		map.put(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.APPLICATION_JSON);
+		ops.convertAndSend("/queue/search/" + targetedTweet.getFirstTarget(),
+				targetedTweet.getTweet(),map);
 
 	}
 
